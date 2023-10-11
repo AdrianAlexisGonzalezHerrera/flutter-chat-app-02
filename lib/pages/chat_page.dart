@@ -1,8 +1,12 @@
 import 'dart:io';
 
-import 'package:cchat_app/widgets/custom_widgets.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:provider/provider.dart';
+
+import 'package:cchat_app/models/custom_models.dart';
+import 'package:cchat_app/services/custom_services.dart';
+import 'package:cchat_app/widgets/custom_widgets.dart';
 
 
 class ChatPage extends StatefulWidget {
@@ -14,6 +18,10 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
 
   final _textController = new TextEditingController();
   final _focusNode = new FocusNode();
+
+  late AuthService authService;
+  late ChatService chatService;
+  late SocketService socketService;
 
   List<ChatMessage> _messages = [
     // ChatMessage(texto: 'Hola Mundo', uid: '123'),
@@ -27,19 +35,74 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
   bool _estaEscribiendo = false;
 
   @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+
+    this.authService   = Provider.of<AuthService>(context, listen: false );
+    this.chatService   = Provider.of<ChatService>(context, listen: false );
+    this.socketService = Provider.of<SocketService>(context, listen: false );
+
+
+    this.socketService.socket.on( 'mensaje-personal' , _escuchandoMensaje );
+
+    _cargarHistorial( this.chatService.usuarioPara.uid );
+  }
+
+  void _cargarHistorial( String usuarioID ) async {
+
+    List<Mensaje> chat = await this.chatService.getChat(usuarioID);
+
+    //print( chat );
+    final history = chat.map((m) => new ChatMessage(
+      texto: m.mensaje, 
+      uid: m.de, 
+      animationController: new AnimationController( vsync: this, duration: Duration( milliseconds: 0))..forward(),
+    ));
+
+    setState(() {
+      _messages.insertAll( 0, history );
+    });
+
+  }
+
+  void _escuchandoMensaje( dynamic payload ) {
+
+    // print( 'Tengo Mensaje!!! $payload' );
+    // print( payload['mensaje']);
+
+    ChatMessage message = new ChatMessage(
+      texto: payload['mensaje'], 
+      uid: payload['de'], 
+      animationController: AnimationController( vsync: this, duration: Duration( milliseconds: 300))
+    );
+
+    setState(() {
+      _messages.insert( 0, message );
+    });
+
+    message.animationController.forward();
+
+  }
+
+  @override
   Widget build(BuildContext context) {
+
+    //final chatService = Provider.of<ChatService>(context);
+    final usuarioPara = chatService.usuarioPara;
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
         title: Column(
           children: [
             CircleAvatar(
-              child: Text('Te', style: TextStyle( fontSize: 12) ),
+              child: Text( usuarioPara.nombre.substring(0,2), style: TextStyle( fontSize: 12) ),
               backgroundColor: Colors.blue[100],
               maxRadius: 14,
             ),
             SizedBox( height: 3),
-            Text('Test Nombre', style: TextStyle( fontSize: 14, color: Colors.black87 ) ),
+            Text( usuarioPara.nombre, style: TextStyle( fontSize: 14, color: Colors.black87 ) ),
           ],
         ),
         centerTitle: true,
@@ -144,22 +207,34 @@ _handleSubmit( String texto ) {
 
   if ( texto.length == 0 ) return;
   
-  print( texto );
+  // print( texto );
   _textController.clear();
   _focusNode.requestFocus();
-
+  
+  
   final newMessage = new ChatMessage(
     texto: texto, 
-    uid: '123', 
+    // uid: '123', 
+    uid: authService.usuario!.uid ,
     animationController: AnimationController(vsync: this, duration: Duration( milliseconds: 400 )),
   );
   
   _messages.insert( 0, newMessage );
   newMessage.animationController.forward();
 
-  setState(() {
-    _estaEscribiendo = false;
+  setState(() { _estaEscribiendo = false; });
+  //final de = this.authService.usuario?.uid;
+  //final para = this.chatService.usuarioPara.uid;
+  //
+  //print('de: $de' );
+  //print('para: $para');
+
+  this.socketService.emit('mensaje-personal', {
+   'de': this.authService.usuario?.uid,
+   'para': this.chatService.usuarioPara.uid,
+   'mensaje': texto
   });
+  
 }
 
 @override
@@ -170,6 +245,7 @@ _handleSubmit( String texto ) {
       message.animationController.dispose();
     }
     
+    this.socketService.socket.off( 'mensaje-personal' );
     super.dispose();
   }
 }

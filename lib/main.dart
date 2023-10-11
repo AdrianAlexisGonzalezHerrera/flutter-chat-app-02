@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-
 import 'package:provider/provider.dart';
 
-import 'package:cchat_app/routes/routes.dart';
 import 'package:cchat_app/services/custom_services.dart';
 
+import 'package:cchat_app/routes/routes.dart';
 
 void main() => runApp(const MyApp());
 
@@ -17,6 +16,8 @@ const MyApp({super.key});
     return MultiProvider(
       providers: [
         ChangeNotifierProvider( create: ( _ ) => AuthService() ),
+        ChangeNotifierProvider( create: ( _ ) => SocketService() ),
+        ChangeNotifierProvider( create: ( _ ) => ChatService() ),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
